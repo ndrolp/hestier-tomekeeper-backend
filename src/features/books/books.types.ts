@@ -1,3 +1,5 @@
+import { book } from '../../db/books.schema';
+
 export interface SearchBooksResult {
   id: number;
   title: string;
@@ -8,3 +10,5 @@ export interface SearchBooksResult {
   coverUrl: string | null;
   seriesName: string | null;
 }
+
+export type SearchBooksOrder = keyof typeof book.$inferInsert | 'seriesName';
