@@ -2,7 +2,11 @@ import { defineRelationsPart } from 'drizzle-orm';
 import { pgTable, integer, varchar, pgEnum } from 'drizzle-orm/pg-core';
 import { book } from './books.schema';
 
-export const editionsFormatEnum = pgEnum('editionFormat', ['Digital', 'Hardcover', 'Paperback']);
+export const editionsFormatEnum = pgEnum('editionFormat', [
+  'Digital',
+  'Hardcover',
+  'Paperback',
+]);
 
 export const edition = pgTable('editions', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
