@@ -12,3 +12,22 @@ export interface SearchBooksResult {
 }
 
 export type SearchBooksOrder = keyof typeof book.$inferInsert | 'seriesName';
+
+export interface CreateBookInput {
+  title: string;
+  author: string;
+  originalTitle?: string;
+  seriesId?: number;
+  seriesOrder?: number;
+  coverUrl?: string;
+}
+
+export interface CreateBookResult {
+  id: number;
+  title: string;
+  author: string;
+  originalTitle: string | null;
+  seriesId: number | null;
+  seriesOrder: number | null;
+  coverUrl: string | null;
+}

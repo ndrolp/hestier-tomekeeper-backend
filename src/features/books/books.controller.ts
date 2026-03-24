@@ -1,7 +1,8 @@
-import { Controller, Route } from 'deco-express';
+import { Controller, Route, Validate } from 'deco-express';
 import { Request, Response } from 'express';
-import { countBooks, searchBooks } from './books.service';
-import { SearchBooksOrder } from './books.types';
+import { countBooks, createBook, searchBooks } from './books.service';
+import { CreateBookInput, SearchBooksOrder } from './books.types';
+import { CreateBookValidator } from './books.validators';
 
 @Controller('/books')
 export class BooksController {
@@ -33,6 +34,24 @@ export class BooksController {
       return res
         .status(500)
         .json({ error: 'An error occurred while searching for books.' });
+    }
+  }
+
+  @Route('post', '/')
+  @Validate(CreateBookValidator)
+  async createBook(
+    req: Request<object, object, CreateBookInput>,
+    res: Response,
+  ) {
+    try {
+      const input = req.body;
+      const newBook = await createBook(input);
+      return res.status(201).json(newBook);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ error: 'An error occurred while creating the book.' });
     }
   }
 }

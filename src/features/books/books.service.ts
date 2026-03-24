@@ -2,7 +2,12 @@ import { eq, ilike, or, count } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { book } from '../../db/books.schema';
 import { series } from '../../db/series.schema';
-import { SearchBooksOrder, SearchBooksResult } from './books.types';
+import {
+  CreateBookInput,
+  CreateBookResult,
+  SearchBooksOrder,
+  SearchBooksResult,
+} from './books.types';
 
 /**
  * Search for books based on a query string, with pagination and sorting options.
@@ -95,6 +100,38 @@ export async function getBookById(
     .limit(1);
 
   if (data.length === 0) return null;
+
+  return data[0];
+}
+
+/**
+ * Create a new book record in the database.
+ * @param { CreateBookInput } input - An object containing the details of the book to create.
+ * @returns A promise that resolves to the created book's details.
+ */
+export async function createBook({
+  title,
+  author,
+  originalTitle,
+  seriesId,
+  seriesOrder,
+  coverUrl,
+}: CreateBookInput): Promise<CreateBookResult> {
+  const data = await db
+    .insert(book)
+    .values({
+      title: title,
+      author: author,
+      originalTitle: originalTitle ?? null,
+      seriesId: seriesId ?? null,
+      seriesOrder: seriesOrder ?? null,
+      coverUrl: coverUrl ?? null,
+    })
+    .returning();
+
+  if (data.length === 0) {
+    throw new Error('Failed to create book');
+  }
 
   return data[0];
 }
