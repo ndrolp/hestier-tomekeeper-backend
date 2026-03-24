@@ -8,6 +8,8 @@ import { book } from './db/books.schema';
 import { series } from './db/series.schema';
 import { edition } from './db/edition.schema';
 import { configDotenv } from 'dotenv';
+import { BooksController } from './features/books/books.controller';
+import morgan from 'morgan';
 configDotenv();
 
 const app = express();
@@ -15,17 +17,21 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-defineRoutes([HealthController], app);
+if (env.NODE_ENV === 'development') {
+  app.use(morgan('combined'));
+}
+
+defineRoutes([HealthController, BooksController], app);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 
   if (env.NODE_ENV === 'development') {
-    seedDatabase();
+    // seedDatabase();
   }
 });
 
-const seedDatabase = async () => {
+export const seedDatabase = async () => {
   const newSeries = await db
     .insert(series)
     .values({
