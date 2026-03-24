@@ -17,11 +17,15 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-if (env.NODE_ENV === 'development') {
-  app.use(morgan('combined'));
-}
+if (env.NODE_ENV === 'development') app.use(morgan('combined'));
 
-defineRoutes([HealthController, BooksController], app);
+defineRoutes(
+  [HealthController, BooksController],
+  app,
+  true,
+  1,
+  env.NODE_ENV === 'development' ? true : false,
+);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
