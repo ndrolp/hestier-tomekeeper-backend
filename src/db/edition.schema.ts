@@ -1,6 +1,6 @@
 import { defineRelationsPart } from 'drizzle-orm';
 import { pgTable, integer, varchar, pgEnum } from 'drizzle-orm/pg-core';
-import { book } from './books.schema';
+import { books } from './books.schema';
 
 export const editionsFormatEnum = pgEnum('editionFormat', [
   'Digital',
@@ -8,26 +8,30 @@ export const editionsFormatEnum = pgEnum('editionFormat', [
   'Paperback',
 ]);
 
-export const edition = pgTable('editions', {
+export const editions = pgTable('editions', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: varchar({ length: 255 }).notNull(),
   bookId: integer()
-    .references(() => book.id)
+    .references(() => books.id)
     .notNull(),
   publisher: varchar({ length: 255 }),
   publicationDate: varchar({ length: 255 }),
   isbn: varchar({ length: 255 }),
   format: editionsFormatEnum(),
+  language: varchar({ length: 255 }),
 });
 
-export const editionsToBooks = defineRelationsPart({ book, edition }, (r) => ({
-  edition: {
-    book: r.one.book({
-      from: r.edition.bookId,
-      to: r.book.id,
-    }),
-  },
-  book: {
-    editions: r.many.edition(),
-  },
-}));
+export const editionsToBooks = defineRelationsPart(
+  { books, editions },
+  (r) => ({
+    editions: {
+      books: r.one.books({
+        from: r.editions.bookId,
+        to: r.books.id,
+      }),
+    },
+    books: {
+      editions: r.many.editions(),
+    },
+  }),
+);
