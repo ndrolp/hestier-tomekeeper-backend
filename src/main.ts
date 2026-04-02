@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { configDotenv } from 'dotenv';
 import { BooksController } from './features/books/books.controller';
 import morgan from 'morgan';
+import { EpubController } from './features/epub/epub.controller';
 configDotenv();
 
 const app = express();
@@ -16,7 +17,7 @@ app.use(express.json());
 if (env.NODE_ENV === 'development') app.use(morgan('combined'));
 
 defineRoutes(
-  [HealthController, BooksController],
+  [HealthController, BooksController, EpubController],
   app,
   true,
   1,
