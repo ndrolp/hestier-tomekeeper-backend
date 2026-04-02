@@ -25,7 +25,7 @@ export async function searchBooks(
 ): Promise<SearchBooksResult[]> {
   const offset = (page - 1) * limit;
 
-  const data = await db
+  let data = await db
     .select({
       id: books.id,
       title: books.title,
@@ -48,7 +48,17 @@ export async function searchBooks(
     .limit(limit)
     .offset(offset);
 
-  return data;
+  data = await Promise.all(
+    data.map(async (book) => {
+      const authors = await getBookAuthors(book.id);
+      return {
+        ...book,
+        authors,
+      };
+    }),
+  );
+
+  return data as SearchBooksResult[];
 }
 /**
  * Count the total number of books matching the search query.
@@ -80,7 +90,7 @@ export async function countBooks(query: string = ''): Promise<number> {
 export async function getBookById(
   id: number,
 ): Promise<SearchBooksResult | null> {
-  const data = await db
+  let data = await db
     .select({
       id: books.id,
       title: books.title,
@@ -97,7 +107,17 @@ export async function getBookById(
 
   if (data.length === 0) return null;
 
-  return data[0];
+  data = await Promise.all(
+    data.map((book) => {
+      const autors = getBookAuthors(book.id);
+      return {
+        ...book,
+        authors: autors,
+      };
+    }),
+  );
+
+  return data[0] as SearchBooksResult;
 }
 
 /**
@@ -128,4 +148,17 @@ export async function createBook({
   }
 
   return data[0];
+}
+
+export async function getBookAuthors(id: number): Promise<string[]> {
+  const data = await db.query.books.findFirst({
+    where: {
+      id: id,
+    },
+    with: { authors: { columns: { name: true } } },
+  });
+  console.log({ data });
+  const result = data?.authors.map((author) => author.name) ?? [];
+  console.log({ result });
+  return result;
 }

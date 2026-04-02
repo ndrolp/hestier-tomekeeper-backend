@@ -3,6 +3,7 @@ import { books } from '../../db/books.schema';
 export interface SearchBooksResult {
   id: number;
   title: string;
+  authors: string[] | null;
   originalTitle: string | null;
   seriesId: number | null;
   seriesOrder: number | null;
