@@ -1,9 +1,8 @@
-import { book } from '../../db/books.schema';
+import { books } from '../../db/books.schema';
 
 export interface SearchBooksResult {
   id: number;
   title: string;
-  author: string;
   originalTitle: string | null;
   seriesId: number | null;
   seriesOrder: number | null;
@@ -11,11 +10,10 @@ export interface SearchBooksResult {
   seriesName: string | null;
 }
 
-export type SearchBooksOrder = keyof typeof book.$inferInsert | 'seriesName';
+export type SearchBooksOrder = keyof typeof books.$inferInsert | 'seriesName';
 
 export interface CreateBookInput {
   title: string;
-  author: string;
   originalTitle?: string;
   seriesId?: number;
   seriesOrder?: number;
@@ -25,7 +23,6 @@ export interface CreateBookInput {
 export interface CreateBookResult {
   id: number;
   title: string;
-  author: string;
   originalTitle: string | null;
   seriesId: number | null;
   seriesOrder: number | null;

@@ -4,7 +4,7 @@ import { defineRelationsPart } from 'drizzle-orm';
 
 export const authors = pgTable('authors', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: varchar({ length: 255 }).notNull(),
+  name: varchar({ length: 255 }).notNull().unique(),
 });
 
 export const booksToAuthors = pgTable('books_to_authors', {
