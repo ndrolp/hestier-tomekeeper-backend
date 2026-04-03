@@ -7,4 +7,7 @@ export interface EpubMetadata {
   date?: string;
   isbn?: string;
   cover?: string;
+  series?: string;
+  collection?: string;
+  subject?: string[];
 }

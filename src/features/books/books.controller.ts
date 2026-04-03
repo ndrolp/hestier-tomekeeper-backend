@@ -1,8 +1,19 @@
 import { Controller, Route, Validate } from 'deco-express';
 import { Request, Response } from 'express';
-import { countBooks, createBook, searchBooks } from './books.service';
-import { CreateBookInput, SearchBooksOrder } from './books.types';
-import { CreateBookValidator } from './books.validators';
+import {
+  countBooks,
+  createBook,
+  getBookById,
+  importBook,
+  searchBooks,
+} from './books.service';
+import {
+  CreateBookInput,
+  ImportBookInput,
+  SearchBooksOrder,
+} from './books.types';
+import { CreateBookValidator, ImportBookValidator } from './books.validators';
+import { downloadCover } from '../covers/cover.service';
 
 @Controller('/books')
 export class BooksController {
@@ -30,10 +41,9 @@ export class BooksController {
         limit: parseInt(limit.toString()),
       });
     } catch (error) {
-      console.error('Error searching books:', error);
-      return res
-        .status(500)
-        .json({ error: 'An error occurred while searching for books.' });
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Error searching books:', msg);
+      return res.status(500).json({ error: `Failed to load books: ${msg}` });
     }
   }
 
@@ -52,6 +62,53 @@ export class BooksController {
       return res
         .status(500)
         .json({ error: 'An error occurred while creating the book.' });
+    }
+  }
+
+  @Route('post', '/import')
+  @Validate(ImportBookValidator)
+  async importBook(
+    req: Request<object, object, ImportBookInput>,
+    res: Response,
+  ) {
+    try {
+      const { coverUrl, ...rest } = req.body;
+      const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
+
+      let localCoverUrl: string | undefined;
+      if (coverUrl) {
+        try {
+          localCoverUrl = await downloadCover(coverUrl, serverBaseUrl);
+        } catch (err) {
+          console.warn('Cover download failed, continuing without cover:', err);
+        }
+      }
+
+      const newBook = await importBook({ ...rest, coverUrl: localCoverUrl });
+      return res.status(201).json(newBook);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ error: 'An error occurred while importing the book.' });
+    }
+  }
+
+  @Route('get', '/:id')
+  async getBook(req: Request<{ id: string }>, res: Response) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid book ID.' });
+    }
+    try {
+      const book = await getBookById(id);
+      if (!book) return res.status(404).json({ error: 'Book not found.' });
+      return res.status(200).json(book);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ error: 'An error occurred while fetching the book.' });
     }
   }
 }

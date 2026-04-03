@@ -1,22 +1,16 @@
 import { eq, ilike, or, count } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { books } from '../../db/books.schema';
+import { authors, booksToAuthors } from '../../db/author.schema';
 import { series } from '../../db/series.schema';
 import {
   CreateBookInput,
   CreateBookResult,
+  ImportBookInput,
   SearchBooksOrder,
   SearchBooksResult,
 } from './books.types';
 
-/**
- * Search for books based on a query string, with pagination and sorting options.
- * @param query - The search query to filter books by title, author, series name, or original title.
- * @param page - The page number for pagination (default is 1).
- * @param limit - The number of results per page (default is 10).
- * @param orderBy - The field to sort the results by (default is 'title').
- * @returns A promise that resolves to an array of matching books with series information.
- */
 export async function searchBooks(
   query: string = '',
   page: number = 1,
@@ -34,6 +28,11 @@ export async function searchBooks(
       seriesOrder: books.seriesOrder,
       coverUrl: books.coverUrl,
       seriesName: series.name,
+      description: books.description,
+      publisher: books.publisher,
+      publishedDate: books.publishedDate,
+      language: books.language,
+      isbn: books.isbn,
     })
     .from(books)
     .leftJoin(series, eq(books.seriesId, series.id))
@@ -49,22 +48,15 @@ export async function searchBooks(
     .offset(offset);
 
   data = await Promise.all(
-    data.map(async (book) => {
-      const authors = await getBookAuthors(book.id);
-      return {
-        ...book,
-        authors,
-      };
-    }),
+    data.map(async (book) => ({
+      ...book,
+      authors: await getBookAuthors(book.id),
+    })),
   );
 
   return data as SearchBooksResult[];
 }
-/**
- * Count the total number of books matching the search query.
- * @param query - The search query to filter books by title, author, series name, or original title.
- * @returns A promise that resolves to the total count of matching books.
- */
+
 export async function countBooks(query: string = ''): Promise<number> {
   const result = await db
     .select({ count: count() })
@@ -82,11 +74,6 @@ export async function countBooks(query: string = ''): Promise<number> {
   return result[0]?.count ?? 0;
 }
 
-/**
- * Get a book by its ID, including series information if available.
- * @param id - The ID of the book to retrieve.
- * @returns A promise that resolves to the book details or null if not found.
- */
 export async function getBookById(
   id: number,
 ): Promise<SearchBooksResult | null> {
@@ -99,6 +86,11 @@ export async function getBookById(
       seriesOrder: books.seriesOrder,
       coverUrl: books.coverUrl,
       seriesName: series.name,
+      description: books.description,
+      publisher: books.publisher,
+      publishedDate: books.publishedDate,
+      language: books.language,
+      isbn: books.isbn,
     })
     .from(books)
     .where(eq(books.id, id))
@@ -108,57 +100,114 @@ export async function getBookById(
   if (data.length === 0) return null;
 
   data = await Promise.all(
-    data.map((book) => {
-      const autors = getBookAuthors(book.id);
-      return {
-        ...book,
-        authors: autors,
-      };
-    }),
+    data.map(async (book) => ({
+      ...book,
+      authors: await getBookAuthors(book.id),
+    })),
   );
 
   return data[0] as SearchBooksResult;
 }
 
-/**
- * Create a new book record in the database.
- * @param { CreateBookInput } input - An object containing the details of the book to create.
- * @returns A promise that resolves to the created book's details.
- */
 export async function createBook({
   title,
   originalTitle,
   seriesId,
   seriesOrder,
   coverUrl,
+  description,
+  publisher,
+  publishedDate,
+  language,
+  isbn,
 }: CreateBookInput): Promise<CreateBookResult> {
   const data = await db
     .insert(books)
     .values({
-      title: title,
+      title,
       originalTitle: originalTitle ?? null,
       seriesId: seriesId ?? null,
       seriesOrder: seriesOrder ?? null,
       coverUrl: coverUrl ?? null,
+      description: description || null,
+      publisher: publisher || null,
+      publishedDate: publishedDate || null,
+      language: language || null,
+      isbn: isbn || null,
     })
     .returning();
 
-  if (data.length === 0) {
-    throw new Error('Failed to create book');
-  }
-
+  if (data.length === 0) throw new Error('Failed to create book');
   return data[0];
 }
 
 export async function getBookAuthors(id: number): Promise<string[]> {
   const data = await db.query.books.findFirst({
-    where: {
-      id: id,
-    },
+    where: { id },
     with: { authors: { columns: { name: true } } },
   });
-  console.log({ data });
-  const result = data?.authors.map((author) => author.name) ?? [];
-  console.log({ result });
-  return result;
+  return data?.authors.map((a) => a.name) ?? [];
+}
+
+export async function upsertAuthor(name: string): Promise<number> {
+  const existing = await db
+    .select({ id: authors.id })
+    .from(authors)
+    .where(eq(authors.name, name))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0].id;
+
+  const created = await db
+    .insert(authors)
+    .values({ name })
+    .returning({ id: authors.id });
+  return created[0].id;
+}
+
+export async function upsertSeries(name: string): Promise<number> {
+  const existing = await db
+    .select({ id: series.id })
+    .from(series)
+    .where(eq(series.name, name))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0].id;
+
+  const created = await db
+    .insert(series)
+    .values({ name })
+    .returning({ id: series.id });
+  return created[0].id;
+}
+
+export async function linkAuthorsToBook(
+  bookId: number,
+  authorIds: number[],
+): Promise<void> {
+  if (authorIds.length === 0) return;
+  await db
+    .insert(booksToAuthors)
+    .values(authorIds.map((authorId) => ({ bookId, authorId })));
+}
+
+export async function importBook(
+  input: ImportBookInput,
+): Promise<CreateBookResult> {
+  const { authorNames, seriesName, ...bookData } = input;
+
+  if (seriesName && !bookData.seriesId) {
+    bookData.seriesId = await upsertSeries(seriesName);
+  }
+
+  const book = await createBook(bookData);
+
+  if (authorNames && authorNames.length > 0) {
+    const authorIds = await Promise.all(
+      authorNames.map((name) => upsertAuthor(name)),
+    );
+    await linkAuthorsToBook(book.id, authorIds);
+  }
+
+  return book;
 }

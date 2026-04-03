@@ -1,4 +1,4 @@
-import { pgTable, integer, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, integer, varchar, text } from 'drizzle-orm/pg-core';
 import { series } from './series.schema';
 import { defineRelationsPart } from 'drizzle-orm';
 
@@ -8,7 +8,12 @@ export const books = pgTable('books', {
   originalTitle: varchar({ length: 255 }),
   seriesId: integer().references(() => series.id),
   seriesOrder: integer(),
-  coverUrl: varchar({ length: 255 }),
+  coverUrl: varchar({ length: 512 }),
+  description: text(),
+  publisher: varchar({ length: 255 }),
+  publishedDate: varchar({ length: 50 }),
+  language: varchar({ length: 10 }),
+  isbn: varchar({ length: 20 }),
 });
 
 export const booksToSeries = defineRelationsPart({ books, series }, (r) => ({

@@ -26,6 +26,9 @@ export async function getEpubMetadata(path: string) {
         description: epub.metadata.description,
         isbn: epub.metadata.ISBN,
         date: epub.metadata.date,
+        series: epub.metadata['calibre:series'],
+        collection: epub.metadata['belongs-to-collection'],
+        subject: epub.metadata.subject,
         cover: await getCoverBase64(epub, epub.metadata.cover),
       });
     });
