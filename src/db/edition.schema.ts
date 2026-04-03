@@ -19,6 +19,7 @@ export const editions = pgTable('editions', {
   isbn: varchar({ length: 255 }),
   format: editionsFormatEnum(),
   language: varchar({ length: 255 }),
+  filePath: varchar({ length: 512 }),
 });
 
 export const editionsToBooks = defineRelationsPart(

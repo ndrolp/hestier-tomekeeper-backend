@@ -14,6 +14,21 @@ export const CreateBookValidator = Joi.object({
   isbn: Joi.string().optional(),
 });
 
+export const UpdateBookValidator = Joi.object({
+  title: Joi.string().optional(),
+  originalTitle: Joi.string().allow('', null).optional(),
+  seriesId: Joi.number().integer().allow(null).optional(),
+  seriesName: Joi.string().allow('', null).optional(),
+  seriesOrder: Joi.number().integer().allow(null).optional(),
+  coverUrl: Joi.string().uri().allow('', null).optional(),
+  description: Joi.string().allow('', null).optional(),
+  publisher: Joi.string().allow('', null).optional(),
+  publishedDate: Joi.string().allow('', null).optional(),
+  language: Joi.string().allow('', null).optional(),
+  isbn: Joi.string().allow('', null).optional(),
+  authorNames: Joi.array().items(Joi.string()).optional(),
+});
+
 export const ImportBookValidator = Joi.object({
   title: Joi.string().required(),
   authorNames: Joi.array().items(Joi.string()).optional(),

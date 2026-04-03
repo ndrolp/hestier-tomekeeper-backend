@@ -3,16 +3,23 @@ import { Request, Response } from 'express';
 import {
   countBooks,
   createBook,
+  deleteBook,
   getBookById,
   importBook,
   searchBooks,
+  updateBook,
 } from './books.service';
 import {
   CreateBookInput,
   ImportBookInput,
   SearchBooksOrder,
+  UpdateBookInput,
 } from './books.types';
-import { CreateBookValidator, ImportBookValidator } from './books.validators';
+import {
+  CreateBookValidator,
+  ImportBookValidator,
+  UpdateBookValidator,
+} from './books.validators';
 import { downloadCover } from '../covers/cover.service';
 
 @Controller('/books')
@@ -109,6 +116,38 @@ export class BooksController {
       return res
         .status(500)
         .json({ error: 'An error occurred while fetching the book.' });
+    }
+  }
+
+  @Route('patch', '/:id')
+  @Validate(UpdateBookValidator)
+  async updateBook(
+    req: Request<{ id: string }, object, UpdateBookInput>,
+    res: Response,
+  ) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid book ID.' });
+    try {
+      const book = await updateBook(id, req.body);
+      if (!book) return res.status(404).json({ error: 'Book not found.' });
+      return res.status(200).json(book);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to update book.' });
+    }
+  }
+
+  @Route('delete', '/:id')
+  async deleteBook(req: Request<{ id: string }>, res: Response) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid book ID.' });
+    try {
+      const deleted = await deleteBook(id);
+      if (!deleted) return res.status(404).json({ error: 'Book not found.' });
+      return res.status(204).send();
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to delete book.' });
     }
   }
 }

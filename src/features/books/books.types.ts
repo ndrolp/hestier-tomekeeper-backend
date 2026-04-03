@@ -59,3 +59,18 @@ export interface ImportBookInput {
   language?: string;
   isbn?: string;
 }
+
+export interface UpdateBookInput {
+  title?: string;
+  originalTitle?: string;
+  seriesId?: number | null;
+  seriesName?: string;
+  seriesOrder?: number | null;
+  coverUrl?: string | null;
+  description?: string | null;
+  publisher?: string | null;
+  publishedDate?: string | null;
+  language?: string | null;
+  isbn?: string | null;
+  authorNames?: string[];
+}

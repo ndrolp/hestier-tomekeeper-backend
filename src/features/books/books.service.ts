@@ -3,12 +3,14 @@ import { db } from '../../config/database';
 import { books } from '../../db/books.schema';
 import { authors, booksToAuthors } from '../../db/author.schema';
 import { series } from '../../db/series.schema';
+import { editions } from '../../db/edition.schema';
 import {
   CreateBookInput,
   CreateBookResult,
   ImportBookInput,
   SearchBooksOrder,
   SearchBooksResult,
+  UpdateBookInput,
 } from './books.types';
 
 export async function searchBooks(
@@ -210,4 +212,61 @@ export async function importBook(
   }
 
   return book;
+}
+
+export async function updateBook(
+  id: number,
+  input: UpdateBookInput,
+): Promise<SearchBooksResult | null> {
+  const { authorNames, seriesName, ...fields } = input;
+
+  // Resolve seriesName to seriesId
+  if (seriesName !== undefined && fields.seriesId === undefined) {
+    fields.seriesId = seriesName ? await upsertSeries(seriesName) : null;
+  }
+
+  const updates: Partial<typeof books.$inferInsert> = {};
+  if (fields.title !== undefined) updates.title = fields.title;
+  if (fields.originalTitle !== undefined)
+    updates.originalTitle = fields.originalTitle || null;
+  if (fields.seriesId !== undefined) updates.seriesId = fields.seriesId;
+  if (fields.seriesOrder !== undefined)
+    updates.seriesOrder = fields.seriesOrder;
+  if (fields.coverUrl !== undefined) updates.coverUrl = fields.coverUrl || null;
+  if (fields.description !== undefined)
+    updates.description = fields.description || null;
+  if (fields.publisher !== undefined)
+    updates.publisher = fields.publisher || null;
+  if (fields.publishedDate !== undefined)
+    updates.publishedDate = fields.publishedDate || null;
+  if (fields.language !== undefined) updates.language = fields.language || null;
+  if (fields.isbn !== undefined) updates.isbn = fields.isbn || null;
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(books).set(updates).where(eq(books.id, id));
+  }
+
+  // Replace authors if provided
+  if (authorNames !== undefined) {
+    await db.delete(booksToAuthors).where(eq(booksToAuthors.bookId, id));
+    if (authorNames.length > 0) {
+      const authorIds = await Promise.all(
+        authorNames.map((n) => upsertAuthor(n)),
+      );
+      await linkAuthorsToBook(id, authorIds);
+    }
+  }
+
+  return getBookById(id);
+}
+
+export async function deleteBook(id: number): Promise<boolean> {
+  // cascade: delete editions, author links, then book
+  await db.delete(editions).where(eq(editions.bookId, id));
+  await db.delete(booksToAuthors).where(eq(booksToAuthors.bookId, id));
+  const rows = await db
+    .delete(books)
+    .where(eq(books.id, id))
+    .returning({ id: books.id });
+  return rows.length > 0;
 }
