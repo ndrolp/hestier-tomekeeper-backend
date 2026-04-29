@@ -11,6 +11,8 @@ import { EditionsController } from './features/editions/editions.controller';
 import morgan from 'morgan';
 import { EpubController } from './features/epub/epub.controller';
 import cors from 'cors';
+import { QuotesController } from './features/quotes/quotes.controller';
+import { StatisticsController } from './features/statistics/statistics.controller';
 configDotenv();
 
 const app = express();
@@ -38,6 +40,8 @@ defineRoutes(
     EditionsController,
     EpubController,
     GoogleBooksController,
+    QuotesController,
+    StatisticsController,
   ],
   app,
   true,
