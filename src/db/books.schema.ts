@@ -10,10 +10,6 @@ export const books = pgTable('books', {
   seriesOrder: integer(),
   coverUrl: varchar({ length: 512 }),
   description: text(),
-  publisher: varchar({ length: 255 }),
-  publishedDate: varchar({ length: 50 }),
-  language: varchar({ length: 10 }),
-  isbn: varchar({ length: 20 }),
 });
 
 export const booksToSeries = defineRelationsPart({ books, series }, (r) => ({

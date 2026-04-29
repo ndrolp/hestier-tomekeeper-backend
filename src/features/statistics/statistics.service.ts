@@ -77,10 +77,12 @@ async function countBooksWithDescription() {
 
 async function countBooksWithIsbn() {
   const result = await db
-    .select({ count: count() })
-    .from(books)
-    .where(isNotNull(books.isbn));
-  return result[0]?.count ?? 0;
+    .select({ bookId: editions.bookId })
+    .from(editions)
+    .where(isNotNull(editions.isbn))
+    .groupBy(editions.bookId);
+
+  return result.length;
 }
 
 async function countBooksInSeries() {
@@ -101,10 +103,10 @@ async function countStandaloneBooks() {
 
 async function countTrackedBookLanguages() {
   const result = await db
-    .select({ language: books.language })
-    .from(books)
-    .where(isNotNull(books.language))
-    .groupBy(books.language);
+    .select({ language: editions.language })
+    .from(editions)
+    .where(isNotNull(editions.language))
+    .groupBy(editions.language);
 
   return result.length;
 }

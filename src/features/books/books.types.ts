@@ -1,4 +1,5 @@
 import { books } from '../../db/books.schema';
+import { EditionFormat } from '../editions/editions.types';
 
 export interface SearchBooksResult {
   id: number;
@@ -10,39 +11,44 @@ export interface SearchBooksResult {
   coverUrl: string | null;
   seriesName: string | null;
   description: string | null;
-  publisher: string | null;
-  publishedDate: string | null;
-  language: string | null;
-  isbn: string | null;
+  publisher: string | null | undefined;
+  publishedDate: string | null | undefined;
+  language: string | null | undefined;
+  isbn: string | null | undefined;
+}
+
+export interface SearchBooksOptions {
+  id: number;
+  title: string;
+  authors: string[] | null;
+  originalTitle: string | null;
+  seriesId: number | null;
+  seriesOrder: number | null;
+  coverUrl: string | null;
+  seriesName: string | null;
+  description: string | null;
 }
 
 export type SearchBooksOrder = keyof typeof books.$inferInsert | 'seriesName';
 
+export interface BookEditionInput {
+  name?: string;
+  publisher?: string;
+  publicationDate?: string;
+  isbn?: string;
+  format?: EditionFormat;
+  language?: string;
+}
+
 export interface CreateBookInput {
   title: string;
+  authorNames?: string[];
   originalTitle?: string;
   seriesId?: number;
   seriesOrder?: number;
   coverUrl?: string;
   description?: string;
-  publisher?: string;
-  publishedDate?: string;
-  language?: string;
-  isbn?: string;
-}
-
-export interface CreateBookResult {
-  id: number;
-  title: string;
-  originalTitle: string | null;
-  seriesId: number | null;
-  seriesOrder: number | null;
-  coverUrl: string | null;
-  description: string | null;
-  publisher: string | null;
-  publishedDate: string | null;
-  language: string | null;
-  isbn: string | null;
+  edition?: BookEditionInput;
 }
 
 export interface ImportBookInput {
@@ -54,10 +60,7 @@ export interface ImportBookInput {
   seriesOrder?: number;
   coverUrl?: string;
   description?: string;
-  publisher?: string;
-  publishedDate?: string;
-  language?: string;
-  isbn?: string;
+  edition?: BookEditionInput;
 }
 
 export interface UpdateBookInput {
@@ -68,9 +71,5 @@ export interface UpdateBookInput {
   seriesOrder?: number | null;
   coverUrl?: string | null;
   description?: string | null;
-  publisher?: string | null;
-  publishedDate?: string | null;
-  language?: string | null;
-  isbn?: string | null;
   authorNames?: string[];
 }

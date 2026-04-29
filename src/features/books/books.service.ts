@@ -1,17 +1,21 @@
-import { eq, ilike, or, count } from 'drizzle-orm';
+import { asc, count, eq, ilike, or } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { books } from '../../db/books.schema';
 import { authors, booksToAuthors } from '../../db/author.schema';
 import { series } from '../../db/series.schema';
 import { editions } from '../../db/edition.schema';
 import {
+  BookEditionInput,
   CreateBookInput,
-  CreateBookResult,
   ImportBookInput,
+  SearchBooksOptions,
   SearchBooksOrder,
   SearchBooksResult,
   UpdateBookInput,
 } from './books.types';
+import { createEdition } from '../editions/editions.service';
+
+const DEFAULT_IMPORTED_EDITION_NAME = 'Imported edition';
 
 export async function searchBooks(
   query: string = '',
@@ -31,10 +35,6 @@ export async function searchBooks(
       coverUrl: books.coverUrl,
       seriesName: series.name,
       description: books.description,
-      publisher: books.publisher,
-      publishedDate: books.publishedDate,
-      language: books.language,
-      isbn: books.isbn,
     })
     .from(books)
     .leftJoin(series, eq(books.seriesId, series.id))
@@ -49,12 +49,7 @@ export async function searchBooks(
     .limit(limit)
     .offset(offset);
 
-  data = await Promise.all(
-    data.map(async (book) => ({
-      ...book,
-      authors: await getBookAuthors(book.id),
-    })),
-  );
+  data = await Promise.all(data.map((book) => enrichBookResult(book)));
 
   return data as SearchBooksResult[];
 }
@@ -89,10 +84,6 @@ export async function getBookById(
       coverUrl: books.coverUrl,
       seriesName: series.name,
       description: books.description,
-      publisher: books.publisher,
-      publishedDate: books.publishedDate,
-      language: books.language,
-      isbn: books.isbn,
     })
     .from(books)
     .where(eq(books.id, id))
@@ -101,28 +92,19 @@ export async function getBookById(
 
   if (data.length === 0) return null;
 
-  data = await Promise.all(
-    data.map(async (book) => ({
-      ...book,
-      authors: await getBookAuthors(book.id),
-    })),
-  );
+  data = await Promise.all(data.map((book) => enrichBookResult(book)));
 
   return data[0] as SearchBooksResult;
 }
 
-export async function createBook({
+async function createBookRecord({
   title,
   originalTitle,
   seriesId,
   seriesOrder,
   coverUrl,
   description,
-  publisher,
-  publishedDate,
-  language,
-  isbn,
-}: CreateBookInput): Promise<CreateBookResult> {
+}: Omit<CreateBookInput, 'authorNames' | 'edition'>) {
   const data = await db
     .insert(books)
     .values({
@@ -132,10 +114,6 @@ export async function createBook({
       seriesOrder: seriesOrder ?? null,
       coverUrl: coverUrl ?? null,
       description: description || null,
-      publisher: publisher || null,
-      publishedDate: publishedDate || null,
-      language: language || null,
-      isbn: isbn || null,
     })
     .returning();
 
@@ -193,25 +171,122 @@ export async function linkAuthorsToBook(
     .values(authorIds.map((authorId) => ({ bookId, authorId })));
 }
 
+async function getPrimaryEditionMetadata(bookId: number) {
+  const rows = await db
+    .select({
+      publisher: editions.publisher,
+      publishedDate: editions.publicationDate,
+      language: editions.language,
+      isbn: editions.isbn,
+    })
+    .from(editions)
+    .where(eq(editions.bookId, bookId))
+    .orderBy(asc(editions.id))
+    .limit(1);
+
+  return (
+    rows[0] ?? {
+      publisher: null,
+      publishedDate: null,
+      language: null,
+      isbn: null,
+    }
+  );
+}
+
+async function enrichBookResult(
+  book: Omit<SearchBooksOptions, 'authors'>,
+): Promise<SearchBooksResult> {
+  const [authorNames, primaryEdition] = await Promise.all([
+    getBookAuthors(book.id),
+    getPrimaryEditionMetadata(book.id),
+  ]);
+
+  return {
+    ...book,
+    authors: authorNames,
+    publisher: primaryEdition.publisher,
+    publishedDate: primaryEdition.publishedDate,
+    language: primaryEdition.language,
+    isbn: primaryEdition.isbn,
+  };
+}
+
+function hasEditionMetadata(edition?: BookEditionInput) {
+  if (!edition) {
+    return false;
+  }
+
+  return Boolean(
+    edition.name?.trim() ||
+    edition.publisher?.trim() ||
+    edition.publicationDate?.trim() ||
+    edition.isbn?.trim() ||
+    edition.format ||
+    edition.language?.trim(),
+  );
+}
+
+async function createInitialEdition(
+  bookId: number,
+  edition?: BookEditionInput,
+) {
+  if (!hasEditionMetadata(edition)) {
+    return;
+  }
+
+  await createEdition({
+    bookId,
+    name: edition?.name?.trim() || DEFAULT_IMPORTED_EDITION_NAME,
+    publisher: edition?.publisher?.trim(),
+    publicationDate: edition?.publicationDate?.trim(),
+    isbn: edition?.isbn?.trim(),
+    format: edition?.format,
+    language: edition?.language?.trim(),
+  });
+}
+
+async function syncBookAuthors(bookId: number, authorNames?: string[]) {
+  if (!authorNames || authorNames.length === 0) {
+    return;
+  }
+
+  const authorIds = await Promise.all(
+    authorNames.map((name) => upsertAuthor(name)),
+  );
+  await linkAuthorsToBook(bookId, authorIds);
+}
+
+export async function createBook(
+  input: CreateBookInput,
+): Promise<SearchBooksResult> {
+  const { authorNames, edition, ...bookData } = input;
+  const book = await createBookRecord(bookData);
+
+  await Promise.all([
+    syncBookAuthors(book.id, authorNames),
+    createInitialEdition(book.id, edition),
+  ]);
+
+  const createdBook = await getBookById(book.id);
+
+  if (!createdBook) {
+    throw new Error('Failed to load created book');
+  }
+
+  return createdBook;
+}
+
 export async function importBook(
   input: ImportBookInput,
-): Promise<CreateBookResult> {
+): Promise<SearchBooksResult> {
   const { authorNames, seriesName, ...bookData } = input;
 
   if (seriesName && !bookData.seriesId) {
     bookData.seriesId = await upsertSeries(seriesName);
   }
 
-  const book = await createBook(bookData);
-
-  if (authorNames && authorNames.length > 0) {
-    const authorIds = await Promise.all(
-      authorNames.map((name) => upsertAuthor(name)),
-    );
-    await linkAuthorsToBook(book.id, authorIds);
-  }
-
-  return book;
+  return createBook({ ...bookData, authorNames });
 }
 
 export async function updateBook(
@@ -235,12 +310,6 @@ export async function updateBook(
   if (fields.coverUrl !== undefined) updates.coverUrl = fields.coverUrl || null;
   if (fields.description !== undefined)
     updates.description = fields.description || null;
-  if (fields.publisher !== undefined)
-    updates.publisher = fields.publisher || null;
-  if (fields.publishedDate !== undefined)
-    updates.publishedDate = fields.publishedDate || null;
-  if (fields.language !== undefined) updates.language = fields.language || null;
-  if (fields.isbn !== undefined) updates.isbn = fields.isbn || null;
 
   if (Object.keys(updates).length > 0) {
     await db.update(books).set(updates).where(eq(books.id, id));
