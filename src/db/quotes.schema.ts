@@ -3,6 +3,7 @@ import {
   integer,
   varchar,
   boolean as pgBoolean,
+  timestamp,
 } from 'drizzle-orm/pg-core';
 import { books } from './books.schema';
 import { defineRelationsPart } from 'drizzle-orm';
@@ -15,6 +16,7 @@ export const quotes = pgTable('quotes', {
   bookId: integer()
     .references(() => books.id)
     .notNull(),
+  createdAt: timestamp().notNull().defaultNow(),
 });
 
 export const quotesToBooks = defineRelationsPart({ books, quotes }, (r) => ({

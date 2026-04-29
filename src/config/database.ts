@@ -9,7 +9,7 @@ export const db = drizzle(env.DB_URL, {
   relations: {
     ...booksToSeries,
     ...editionsToBooks,
-    ...autorsBooksRelation,
     ...quotesToBooks,
+    ...autorsBooksRelation,
   },
 });
