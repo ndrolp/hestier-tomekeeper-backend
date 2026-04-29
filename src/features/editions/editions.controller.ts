@@ -18,6 +18,16 @@ import {
 } from './editions.validators';
 
 const EBOOKS_DIR = path.join(process.cwd(), 'public', 'ebooks');
+const ALLOWED_EBOOK_EXTENSIONS = [
+  '.epub',
+  '.pdf',
+  '.mobi',
+  '.azw3',
+  '.cbz',
+  '.cbr',
+];
+
+fs.mkdirSync(EBOOKS_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -30,8 +40,12 @@ const upload = multer({
   }),
   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['.epub', '.pdf', '.mobi', '.cbz', '.cbr'];
-    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+    cb(
+      null,
+      ALLOWED_EBOOK_EXTENSIONS.includes(
+        path.extname(file.originalname).toLowerCase(),
+      ),
+    );
   },
 });
 
@@ -107,7 +121,10 @@ export class EditionsController {
     const id = parseInt(req.params.id);
     if (isNaN(id))
       return res.status(400).json({ error: 'Invalid edition ID.' });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    if (!req.file)
+      return res.status(400).json({
+        error: `No file uploaded. Supported formats: ${ALLOWED_EBOOK_EXTENSIONS.join(', ')}`,
+      });
 
     try {
       const serverBaseUrl = `${req.protocol}://${req.get('host')}`;

@@ -21,6 +21,7 @@ import {
   UpdateBookValidator,
 } from './books.validators';
 import { downloadCover } from '../covers/cover.service';
+import { createQuoteForBook, getQuotesForBook } from '../quotes/quotes.service';
 
 @Controller('/books')
 export class BooksController {
@@ -148,6 +149,55 @@ export class BooksController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: 'Failed to delete book.' });
+    }
+  }
+
+  @Route('post', '/:id/quotes')
+  async addQuote(req: Request<{ id: string }>, res: Response) {
+    const bookId = parseInt(req.params.id);
+    const { text, public: isPublic } = req.body;
+    const storedBy = 0; //TODO: get user id from auth middleware
+
+    if (isNaN(bookId)) {
+      return res.status(400).json({ error: 'Invalid book ID.' });
+    }
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'Quote text is required.' });
+    }
+
+    try {
+      const quote = await createQuoteForBook(bookId, {
+        text: text.trim(),
+        storedBy: storedBy || 0,
+        isPublic: isPublic || true,
+      });
+      return res.status(201).json(quote);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ error: 'An error occurred while adding the quote.' });
+    }
+  }
+
+  @Route('get', '/:id/quotes')
+  async getQuotes(req: Request<{ id: string }>, res: Response) {
+    const bookId = parseInt(req.params.id);
+    //TODO: get user id from auth middleware
+    const owner = 0;
+
+    if (isNaN(bookId)) {
+      return res.status(400).json({ error: 'Invalid book ID.' });
+    }
+
+    try {
+      const quotes = await getQuotesForBook(bookId, owner);
+      return res.status(200).json(quotes);
+    } catch (error) {
+      console.error(error);
+      return res
+        .status(500)
+        .json({ error: 'An error occurred while fetching quotes.' });
     }
   }
 }
