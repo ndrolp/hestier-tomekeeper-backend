@@ -15,6 +15,7 @@ import {
   SearchBooksOrder,
   UpdateBookInput,
 } from './books.types';
+import type { AuthenticatedRequest } from '../../types/auth';
 import {
   CreateBookValidator,
   ImportBookValidator,
@@ -153,10 +154,17 @@ export class BooksController {
   }
 
   @Route('post', '/:id/quotes')
-  async addQuote(req: Request<{ id: string }>, res: Response) {
+  async addQuote(
+    req: AuthenticatedRequest<
+      { id: string },
+      object,
+      { text?: string; public?: boolean }
+    >,
+    res: Response,
+  ) {
     const bookId = parseInt(req.params.id);
     const { text, public: isPublic } = req.body;
-    const storedBy = 0; //TODO: get user id from auth middleware
+    const storedBy = req.auth.userId;
 
     if (isNaN(bookId)) {
       return res.status(400).json({ error: 'Invalid book ID.' });
@@ -168,8 +176,8 @@ export class BooksController {
     try {
       const quote = await createQuoteForBook(bookId, {
         text: text.trim(),
-        storedBy: storedBy || 0,
-        isPublic: isPublic || true,
+        storedBy,
+        isPublic: typeof isPublic === 'boolean' ? isPublic : true,
       });
       return res.status(201).json(quote);
     } catch (error) {
@@ -181,10 +189,9 @@ export class BooksController {
   }
 
   @Route('get', '/:id/quotes')
-  async getQuotes(req: Request<{ id: string }>, res: Response) {
+  async getQuotes(req: AuthenticatedRequest<{ id: string }>, res: Response) {
     const bookId = parseInt(req.params.id);
-    //TODO: get user id from auth middleware
-    const owner = 0;
+    const owner = req.auth.userId;
 
     if (isNaN(bookId)) {
       return res.status(400).json({ error: 'Invalid book ID.' });

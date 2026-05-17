@@ -13,10 +13,10 @@ import { EpubController } from './features/epub/epub.controller';
 import cors from 'cors';
 import { QuotesController } from './features/quotes/quotes.controller';
 import { StatisticsController } from './features/statistics/statistics.controller';
+import { wardenAuthMiddleware } from './middlewares/warden-auth.middleware';
 configDotenv();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -32,6 +32,8 @@ app.use(
 );
 
 if (env.NODE_ENV === 'development') app.use(morgan('combined'));
+
+app.use(env.API_PREFIX, wardenAuthMiddleware);
 
 defineRoutes(
   [
@@ -50,8 +52,8 @@ defineRoutes(
 );
 
 async function startServer() {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(env.PORT, () => {
+    console.log(`Server running on http://localhost:${env.PORT}`);
   });
 }
 

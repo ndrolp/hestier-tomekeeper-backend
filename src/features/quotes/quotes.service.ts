@@ -14,8 +14,8 @@ export async function createQuoteForBook(
     .insert(quotes)
     .values({
       text: quoteData.text,
-      storedBy: quoteData.storedBy || 0,
-      public: quoteData.isPublic || true,
+      storedBy: quoteData.storedBy ?? 0,
+      public: quoteData.isPublic ?? true,
       bookId,
     })
     .returning();
