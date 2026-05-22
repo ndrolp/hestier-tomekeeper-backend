@@ -8,11 +8,11 @@ import { configDotenv } from 'dotenv';
 import { BooksController } from './features/books/books.controller';
 import { GoogleBooksController } from './features/google-books/google-books.controller';
 import { EditionsController } from './features/editions/editions.controller';
-import morgan from 'morgan';
 import { EpubController } from './features/epub/epub.controller';
-import cors from 'cors';
 import { QuotesController } from './features/quotes/quotes.controller';
 import { StatisticsController } from './features/statistics/statistics.controller';
+import cors from 'cors';
+//import { requestLoggerMiddleware } from './middlewares/request-logger.middleware';
 import { wardenAuthMiddleware } from './middlewares/warden-auth.middleware';
 configDotenv();
 
@@ -20,6 +20,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+//app.use(requestLoggerMiddleware);
 
 // Serve static assets
 app.use(
@@ -30,8 +31,6 @@ app.use(
   '/ebooks',
   express.static(path.join(process.cwd(), 'public', 'ebooks')),
 );
-
-if (env.NODE_ENV === 'development') app.use(morgan('combined'));
 
 app.use(env.API_PREFIX, wardenAuthMiddleware);
 

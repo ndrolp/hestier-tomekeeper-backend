@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import jwt, { type JwtHeader } from 'jsonwebtoken';
+import jwt, { TokenExpiredError, type JwtHeader } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { env } from '../config/env';
 import type { AuthenticatedUser, WardenJwtPayload } from '../types/auth';
@@ -80,6 +80,10 @@ async function verifyToken(token: string): Promise<AuthenticatedUser> {
     throw new Error('Token subject is invalid');
   }
 
+  if (payload.token_use && payload.token_use !== 'access') {
+    throw new Error('Token use is invalid');
+  }
+
   return {
     subject: payload.sub,
     userId,
@@ -101,13 +105,26 @@ export async function wardenAuthMiddleware(
 
   const token = getBearerToken(req.headers.authorization);
   if (!token) {
-    return res.status(401).json({ error: 'Missing or invalid token' });
+    return res.status(401).json({
+      error: 'invalid_token',
+      message: 'Missing or invalid access token',
+    });
   }
 
   try {
     req.auth = await verifyToken(token);
     return next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+  } catch (error) {
+    if (error instanceof TokenExpiredError) {
+      return res.status(401).json({
+        error: 'access_token_expired',
+        message: 'Access token expired',
+      });
+    }
+
+    return res.status(401).json({
+      error: 'invalid_token',
+      message: 'Invalid access token',
+    });
   }
 }

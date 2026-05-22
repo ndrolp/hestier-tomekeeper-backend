@@ -1,10 +1,13 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../../config/database';
+import { editionReadingProgress } from '../../db/edition-reading-progress.schema';
 import { editions } from '../../db/edition.schema';
 import {
   CreateEditionInput,
   Edition,
+  EditionReadingProgress,
   UpdateEditionInput,
+  UpdateEditionReadingProgressInput,
 } from './editions.types';
 
 export async function getEditionsForBook(bookId: number): Promise<Edition[]> {
@@ -81,4 +84,53 @@ export async function deleteEdition(id: number): Promise<boolean> {
     .where(eq(editions.id, id))
     .returning({ id: editions.id });
   return rows.length > 0;
+}
+
+export async function getEditionReadingProgress(
+  editionId: number,
+  userId: number,
+): Promise<EditionReadingProgress | null> {
+  const rows = await db
+    .select()
+    .from(editionReadingProgress)
+    .where(
+      and(
+        eq(editionReadingProgress.editionId, editionId),
+        eq(editionReadingProgress.userId, userId),
+      ),
+    )
+    .limit(1);
+
+  return (rows[0] as EditionReadingProgress | undefined) ?? null;
+}
+
+export async function upsertEditionReadingProgress(
+  editionId: number,
+  userId: number,
+  input: UpdateEditionReadingProgressInput,
+): Promise<EditionReadingProgress> {
+  const rows = await db
+    .insert(editionReadingProgress)
+    .values({
+      editionId,
+      userId,
+      locator: input.locator,
+      progressPercentage: input.progressPercentage ?? null,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [editionReadingProgress.userId, editionReadingProgress.editionId],
+      set: {
+        locator: input.locator,
+        progressPercentage: input.progressPercentage ?? null,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (rows.length === 0) {
+    throw new Error('Failed to save reading progress');
+  }
+
+  return rows[0] as EditionReadingProgress;
 }

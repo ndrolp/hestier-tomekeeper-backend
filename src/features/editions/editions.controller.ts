@@ -7,11 +7,14 @@ import {
   createEdition,
   deleteEdition,
   getEditionById,
+  getEditionReadingProgress,
   getEditionsForBook,
   setEditionFilePath,
+  upsertEditionReadingProgress,
   updateEdition,
 } from './editions.service';
 import { CreateEditionInput, UpdateEditionInput } from './editions.types';
+import type { AuthenticatedRequest } from '../../types/auth';
 import {
   CreateEditionValidator,
   UpdateEditionValidator,
@@ -28,6 +31,11 @@ const ALLOWED_EBOOK_EXTENSIONS = [
 ];
 
 fs.mkdirSync(EBOOKS_DIR, { recursive: true });
+
+function resolveEditionFile(filePath: string) {
+  const filename = path.basename(new URL(filePath).pathname);
+  return path.join(EBOOKS_DIR, filename);
+}
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -155,9 +163,8 @@ export class EditionsController {
       if (!edition.filePath)
         return res.status(404).json({ error: 'No file for this edition.' });
 
-      // filePath is stored as full URL — extract just the filename
       const filename = path.basename(new URL(edition.filePath).pathname);
-      const fileDisk = path.join(EBOOKS_DIR, filename);
+      const fileDisk = resolveEditionFile(edition.filePath);
       if (!fs.existsSync(fileDisk))
         return res.status(404).json({ error: 'File not found on disk.' });
 
@@ -169,6 +176,107 @@ export class EditionsController {
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: 'Failed to download file.' });
+    }
+  }
+
+  @Route('get', '/:id/file')
+  async readFile(req: Request<{ id: string }>, res: Response) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id))
+      return res.status(400).json({ error: 'Invalid edition ID.' });
+
+    try {
+      const edition = await getEditionById(id);
+      if (!edition)
+        return res.status(404).json({ error: 'Edition not found.' });
+      if (!edition.filePath)
+        return res.status(404).json({ error: 'No file for this edition.' });
+
+      const fileDisk = resolveEditionFile(edition.filePath);
+      if (!fs.existsSync(fileDisk))
+        return res.status(404).json({ error: 'File not found on disk.' });
+
+      const filename = path.basename(fileDisk);
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      return res.sendFile(fileDisk);
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: 'Failed to read file.' });
+    }
+  }
+
+  @Route('get', '/:id/progress')
+  async getReadingProgress(
+    req: AuthenticatedRequest<{ id: string }>,
+    res: Response,
+  ) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id))
+      return res.status(400).json({ error: 'Invalid edition ID.' });
+
+    try {
+      const edition = await getEditionById(id);
+      if (!edition)
+        return res.status(404).json({ error: 'Edition not found.' });
+
+      const progress = await getEditionReadingProgress(id, req.auth.userId);
+      return res.status(200).json(progress);
+    } catch (e) {
+      console.error(e);
+      return res
+        .status(500)
+        .json({ error: 'Failed to load reading progress.' });
+    }
+  }
+
+  @Route('put', '/:id/progress')
+  async updateReadingProgress(
+    req: AuthenticatedRequest<
+      { id: string },
+      object,
+      { locator?: string; progressPercentage?: number | null }
+    >,
+    res: Response,
+  ) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id))
+      return res.status(400).json({ error: 'Invalid edition ID.' });
+
+    const locator =
+      typeof req.body?.locator === 'string' ? req.body.locator.trim() : '';
+    const progressPercentage = req.body?.progressPercentage;
+
+    if (!locator) {
+      return res.status(400).json({ error: 'Reading locator is required.' });
+    }
+
+    if (
+      progressPercentage !== undefined &&
+      progressPercentage !== null &&
+      (!Number.isInteger(progressPercentage) ||
+        progressPercentage < 0 ||
+        progressPercentage > 100)
+    ) {
+      return res.status(400).json({
+        error: 'Reading progress percentage must be between 0 and 100.',
+      });
+    }
+
+    try {
+      const edition = await getEditionById(id);
+      if (!edition)
+        return res.status(404).json({ error: 'Edition not found.' });
+
+      const progress = await upsertEditionReadingProgress(id, req.auth.userId, {
+        locator,
+        progressPercentage,
+      });
+      return res.status(200).json(progress);
+    } catch (e) {
+      console.error(e);
+      return res
+        .status(500)
+        .json({ error: 'Failed to save reading progress.' });
     }
   }
 }

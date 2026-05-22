@@ -12,6 +12,19 @@ export interface Edition {
   filePath: string | null;
 }
 
+export interface EditionReadingProgress {
+  userId: number;
+  editionId: number;
+  locator: string;
+  progressPercentage: number | null;
+  updatedAt: Date;
+}
+
+export interface UpdateEditionReadingProgressInput {
+  locator: string;
+  progressPercentage?: number | null;
+}
+
 export interface CreateEditionInput {
   bookId: number;
   name: string;

@@ -12,6 +12,7 @@ export interface WardenJwtPayload extends JwtPayload {
   user_name?: string;
   roles?: string[];
   permissions?: WardenPermission[];
+  token_use?: 'access';
 }
 
 export interface AuthenticatedUser {
