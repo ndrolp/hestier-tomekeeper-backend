@@ -158,12 +158,12 @@ export class BooksController {
     req: AuthenticatedRequest<
       { id: string },
       object,
-      { text?: string; public?: boolean }
+      { text?: string; public?: boolean; locator?: string }
     >,
     res: Response,
   ) {
     const bookId = parseInt(req.params.id);
-    const { text, public: isPublic } = req.body;
+    const { text, public: isPublic, locator: rawLocator } = req.body;
     const storedBy = req.auth.userId;
 
     if (isNaN(bookId)) {
@@ -172,10 +172,22 @@ export class BooksController {
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'Quote text is required.' });
     }
+    if (rawLocator !== undefined && typeof rawLocator !== 'string') {
+      return res.status(400).json({ error: 'Quote locator must be a string.' });
+    }
+
+    const locator = rawLocator?.trim();
+
+    if (rawLocator !== undefined && !locator) {
+      return res
+        .status(400)
+        .json({ error: 'Quote locator must be a non-empty string.' });
+    }
 
     try {
       const quote = await createQuoteForBook(bookId, {
         text: text.trim(),
+        locator,
         storedBy,
         isPublic: typeof isPublic === 'boolean' ? isPublic : true,
       });

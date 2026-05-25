@@ -3,6 +3,7 @@ import { quotes } from '../../db/quotes.schema';
 
 export interface createQuoteData {
   text: string;
+  locator?: string;
   storedBy?: number;
   isPublic?: boolean;
 }
@@ -14,6 +15,7 @@ export async function createQuoteForBook(
     .insert(quotes)
     .values({
       text: quoteData.text,
+      locator: quoteData.locator ?? null,
       storedBy: quoteData.storedBy ?? 0,
       public: quoteData.isPublic ?? true,
       bookId,

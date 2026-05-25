@@ -10,7 +10,8 @@ import { defineRelationsPart } from 'drizzle-orm';
 
 export const quotes = pgTable('quotes', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  text: varchar({ length: 255 }).notNull(),
+  text: varchar({ length: 500 }).notNull(),
+  locator: varchar({ length: 1024 }),
   storedBy: integer().notNull().default(0),
   public: pgBoolean().notNull().default(true),
   bookId: integer()

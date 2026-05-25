@@ -8,8 +8,7 @@ public/
 # Environment variables
 .env
 
-# Drizzle migrations (generated)
-drizzle/
+# Drizzle migrations are tracked in version control
 
 # Logs
 logs/
