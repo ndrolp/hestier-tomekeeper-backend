@@ -1,3 +1,4 @@
+import multer from 'multer';
 import { Controller, Route, Validate } from 'deco-express';
 import { Request, Response } from 'express';
 import {
@@ -23,6 +24,22 @@ import {
 } from './books.validators';
 import { downloadCover } from '../covers/cover.service';
 import { createQuoteForBook, getQuotesForBook } from '../quotes/quotes.service';
+import { uploadVaultAsset } from '../vault/vault.service';
+
+const IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, IMAGE_MIME_TYPES.has(file.mimetype));
+  },
+});
 
 @Controller('/books')
 export class BooksController {
@@ -140,6 +157,45 @@ export class BooksController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: 'Failed to update book.' });
+    }
+  }
+
+  @Route('post', '/:id/cover', coverUpload.single('file'))
+  async uploadCover(req: AuthenticatedRequest<{ id: string }>, res: Response) {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid book ID.' });
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image uploaded. Supported formats: JPEG, PNG, WEBP, GIF.',
+      });
+    }
+
+    try {
+      const existingBook = await getBookById(id);
+      if (!existingBook)
+        return res.status(404).json({ error: 'Book not found.' });
+
+      const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
+      const coverUrl = await uploadVaultAsset(
+        req.auth.token,
+        serverBaseUrl,
+        'covers',
+        {
+          buffer: req.file.buffer,
+          contentType: req.file.mimetype,
+          originalName: req.file.originalname,
+        },
+      );
+      const updatedBook = await updateBook(id, { coverUrl });
+
+      if (!updatedBook) {
+        return res.status(404).json({ error: 'Book not found.' });
+      }
+
+      return res.status(200).json(updatedBook);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Failed to store cover.' });
     }
   }
 

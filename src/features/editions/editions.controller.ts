@@ -26,6 +26,8 @@ import {
   uploadVaultAsset,
   VaultHttpError,
 } from '../vault/vault.service';
+import { getBookById, updateBook } from '../books/books.service';
+import { getEpubMetadata } from '../epub/epub.service';
 
 const LOCAL_EBOOKS_DIR = path.join(process.cwd(), 'public', 'ebooks');
 const UPLOAD_STAGING_DIR = path.join(os.tmpdir(), 'tomekeeper-uploads');
@@ -37,6 +39,7 @@ const ALLOWED_EBOOK_EXTENSIONS = [
   '.cbz',
   '.cbr',
 ];
+const ALLOWED_EPUB_EXTENSIONS = ['.epub'];
 
 fs.mkdirSync(LOCAL_EBOOKS_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_STAGING_DIR, { recursive: true });
@@ -66,6 +69,51 @@ const upload = multer({
   },
 });
 
+const epubUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_STAGING_DIR),
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const ext = path.extname(file.originalname);
+      cb(null, `${unique}${ext}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(
+      null,
+      ALLOWED_EPUB_EXTENSIONS.includes(
+        path.extname(file.originalname).toLowerCase(),
+      ),
+    );
+  },
+});
+
+function normalizeOptionalString(value: string | undefined) {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function getEditionNameFromFile(filename: string) {
+  const parsedName = path.parse(filename).name.trim();
+  return parsedName || 'Imported EPUB';
+}
+
+function parseDataUrlAsset(dataUrl: string) {
+  const match = /^data:(?<mimeType>[^;]+);base64,(?<payload>.+)$/.exec(dataUrl);
+  if (!match?.groups?.mimeType || !match.groups.payload) {
+    return null;
+  }
+
+  const extension = match.groups.mimeType.split('/')[1] ?? 'bin';
+
+  return {
+    buffer: Buffer.from(match.groups.payload, 'base64'),
+    contentType: match.groups.mimeType,
+    originalName: `cover.${extension}`,
+  };
+}
+
 @Controller('/editions')
 export class EditionsController {
   @Route('get', '/book/:bookId')
@@ -94,6 +142,91 @@ export class EditionsController {
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: 'Failed to create edition.' });
+    }
+  }
+
+  @Route('post', '/book/:bookId/import-epub', epubUpload.single('file'))
+  async importEpub(
+    req: AuthenticatedRequest<{ bookId: string }>,
+    res: Response,
+  ) {
+    const bookId = parseInt(req.params.bookId);
+    if (isNaN(bookId))
+      return res.status(400).json({ error: 'Invalid book ID.' });
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No EPUB uploaded. Supported format: .epub',
+      });
+    }
+
+    try {
+      const existingBook = await getBookById(bookId);
+      if (!existingBook) {
+        fs.unlinkSync(req.file.path);
+        return res.status(404).json({ error: 'Book not found.' });
+      }
+
+      const metadata = await getEpubMetadata(req.file.path);
+      const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
+      const createdEdition = await createEdition({
+        bookId,
+        name:
+          normalizeOptionalString(metadata.title) ??
+          getEditionNameFromFile(req.file.originalname),
+        publisher: normalizeOptionalString(metadata.publisher),
+        publicationDate: normalizeOptionalString(metadata.date),
+        isbn: normalizeOptionalString(metadata.isbn),
+        format: 'Digital',
+        language: normalizeOptionalString(metadata.language),
+      });
+
+      try {
+        const fileUrl = await uploadVaultAsset(
+          req.auth.token,
+          serverBaseUrl,
+          'files',
+          {
+            buffer: fs.readFileSync(req.file.path),
+            contentType: req.file.mimetype,
+            originalName: req.file.originalname,
+          },
+        );
+        const edition = await setEditionFilePath(createdEdition.id, fileUrl);
+        if (!edition) throw new Error('Failed to update edition file path.');
+
+        let book = existingBook;
+        const coverAsset = metadata.cover
+          ? parseDataUrlAsset(metadata.cover)
+          : null;
+
+        if (coverAsset) {
+          const coverUrl = await uploadVaultAsset(
+            req.auth.token,
+            serverBaseUrl,
+            'covers',
+            coverAsset,
+          );
+          const updatedBook = await updateBook(bookId, { coverUrl });
+          if (updatedBook) {
+            book = updatedBook;
+          }
+        }
+
+        fs.unlinkSync(req.file.path);
+        return res.status(201).json({ edition, book });
+      } catch (error) {
+        await deleteEdition(createdEdition.id);
+        throw error;
+      }
+    } catch (e) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      if (e instanceof VaultHttpError) {
+        return res.status(e.status).json({ error: e.message });
+      }
+      console.error(e);
+      return res.status(500).json({ error: 'Failed to import EPUB.' });
     }
   }
 

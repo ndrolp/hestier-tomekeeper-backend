@@ -12,6 +12,8 @@ import { EpubController } from './features/epub/epub.controller';
 import { QuotesController } from './features/quotes/quotes.controller';
 import { StatisticsController } from './features/statistics/statistics.controller';
 import { AssetsController } from './features/assets/assets.controller';
+import { AuthorsController } from './features/authors/authors.controller';
+import { SeriesController } from './features/series/series.controller';
 import cors from 'cors';
 //import { requestLoggerMiddleware } from './middlewares/request-logger.middleware';
 import { wardenAuthMiddleware } from './middlewares/warden-auth.middleware';
@@ -39,6 +41,8 @@ defineRoutes(
   [
     HealthController,
     BooksController,
+    AuthorsController,
+    SeriesController,
     AssetsController,
     EditionsController,
     EpubController,

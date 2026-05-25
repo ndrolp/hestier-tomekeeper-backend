@@ -25,7 +25,9 @@ export class VaultHttpError extends Error {
 }
 
 function createVaultUrl(pathname: string) {
-  return new URL(pathname, `${env.VAULT_API_BASE_URL}/`);
+  const normalizedBaseUrl = `${env.VAULT_API_BASE_URL.replace(/\/$/, '')}/`;
+  const normalizedPath = pathname.replace(/^\/+/, '');
+  return new URL(normalizedPath, normalizedBaseUrl);
 }
 
 async function parseVaultError(response: Response) {
