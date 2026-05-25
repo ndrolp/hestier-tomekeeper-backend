@@ -13,6 +13,12 @@ export const env = {
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   PORT: parseInt(process.env.PORT ?? '3001', 10),
   API_PREFIX: process.env.API_PREFIX ?? '/api/v1',
+  VAULT_API_BASE_URL:
+    process.env.VAULT_API_BASE_URL ?? 'http://localhost:8000/api/v1',
+  VAULT_COVERS_FOLDER_NAME:
+    process.env.VAULT_COVERS_FOLDER_NAME ?? 'Tomekeeper Covers',
+  VAULT_FILES_FOLDER_NAME:
+    process.env.VAULT_FILES_FOLDER_NAME ?? 'Tomekeeper Files',
   DB_USER: process.env.DB_USER,
   DB_PASSWORD: process.env.DB_PASSWORD,
   DB_NAME: process.env.DB_NAME,

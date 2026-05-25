@@ -77,7 +77,7 @@ export class BooksController {
   @Route('post', '/import')
   @Validate(ImportBookValidator)
   async importBook(
-    req: Request<object, object, ImportBookInput>,
+    req: AuthenticatedRequest<object, object, ImportBookInput>,
     res: Response,
   ) {
     try {
@@ -87,7 +87,11 @@ export class BooksController {
       let localCoverUrl: string | undefined;
       if (coverUrl) {
         try {
-          localCoverUrl = await downloadCover(coverUrl, serverBaseUrl);
+          localCoverUrl = await downloadCover(
+            coverUrl,
+            serverBaseUrl,
+            req.auth.token,
+          );
         } catch (err) {
           console.warn('Cover download failed, continuing without cover:', err);
         }

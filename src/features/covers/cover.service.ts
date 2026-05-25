@@ -1,16 +1,18 @@
-import crypto from 'crypto';
-import fs from 'fs';
 import http from 'http';
 import https from 'https';
-import path from 'path';
+import crypto from 'crypto';
+import { uploadVaultAsset } from '../vault/vault.service';
 
-const COVERS_DIR = path.join(process.cwd(), 'public', 'covers');
-
-if (!fs.existsSync(COVERS_DIR)) {
-  fs.mkdirSync(COVERS_DIR, { recursive: true });
+function getCoverFilename(url: string) {
+  const hash = crypto.createHash('md5').update(url).digest('hex');
+  const ext = /\.png(\?|$)/i.test(url) ? 'png' : 'jpg';
+  return `${hash}.${ext}`;
 }
 
-function downloadToBuffer(url: string, redirects = 5): Promise<Buffer> {
+function downloadToBuffer(
+  url: string,
+  redirects = 5,
+): Promise<{ buffer: Buffer; contentType?: string; finalUrl: string }> {
   return new Promise((resolve, reject) => {
     if (redirects === 0) return reject(new Error('Too many redirects'));
 
@@ -32,7 +34,16 @@ function downloadToBuffer(url: string, redirects = 5): Promise<Buffer> {
         return reject(new Error(`HTTP ${res.statusCode}`));
       }
       res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('end', () =>
+        resolve({
+          buffer: Buffer.concat(chunks),
+          contentType:
+            typeof res.headers['content-type'] === 'string'
+              ? res.headers['content-type']
+              : undefined,
+          finalUrl: url,
+        }),
+      );
       res.on('error', reject);
     });
 
@@ -40,23 +51,16 @@ function downloadToBuffer(url: string, redirects = 5): Promise<Buffer> {
   });
 }
 
-/**
- * Download a remote cover image, save it to public/covers/, and return its local URL.
- * If the file already exists (same URL hash) the download is skipped.
- */
 export async function downloadCover(
   remoteUrl: string,
   serverBaseUrl: string,
+  token: string,
 ): Promise<string> {
-  const hash = crypto.createHash('md5').update(remoteUrl).digest('hex');
-  const ext = /\.png(\?|$)/i.test(remoteUrl) ? 'png' : 'jpg';
-  const filename = `${hash}.${ext}`;
-  const filePath = path.join(COVERS_DIR, filename);
+  const { buffer, contentType, finalUrl } = await downloadToBuffer(remoteUrl);
 
-  if (!fs.existsSync(filePath)) {
-    const buffer = await downloadToBuffer(remoteUrl);
-    fs.writeFileSync(filePath, buffer);
-  }
-
-  return `${serverBaseUrl}/covers/${filename}`;
+  return uploadVaultAsset(token, serverBaseUrl, 'covers', {
+    buffer,
+    contentType,
+    originalName: getCoverFilename(finalUrl),
+  });
 }

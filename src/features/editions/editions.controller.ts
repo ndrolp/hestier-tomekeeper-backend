@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import multer from 'multer';
 import { Controller, Route, Validate } from 'deco-express';
 import { Request, Response } from 'express';
@@ -19,8 +20,15 @@ import {
   CreateEditionValidator,
   UpdateEditionValidator,
 } from './editions.validators';
+import {
+  extractVaultFileId,
+  pipeVaultFileToResponse,
+  uploadVaultAsset,
+  VaultHttpError,
+} from '../vault/vault.service';
 
-const EBOOKS_DIR = path.join(process.cwd(), 'public', 'ebooks');
+const LOCAL_EBOOKS_DIR = path.join(process.cwd(), 'public', 'ebooks');
+const UPLOAD_STAGING_DIR = path.join(os.tmpdir(), 'tomekeeper-uploads');
 const ALLOWED_EBOOK_EXTENSIONS = [
   '.epub',
   '.pdf',
@@ -30,16 +38,17 @@ const ALLOWED_EBOOK_EXTENSIONS = [
   '.cbr',
 ];
 
-fs.mkdirSync(EBOOKS_DIR, { recursive: true });
+fs.mkdirSync(LOCAL_EBOOKS_DIR, { recursive: true });
+fs.mkdirSync(UPLOAD_STAGING_DIR, { recursive: true });
 
 function resolveEditionFile(filePath: string) {
   const filename = path.basename(new URL(filePath).pathname);
-  return path.join(EBOOKS_DIR, filename);
+  return path.join(LOCAL_EBOOKS_DIR, filename);
 }
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, EBOOKS_DIR),
+    destination: (_req, _file, cb) => cb(null, UPLOAD_STAGING_DIR),
     filename: (_req, file, cb) => {
       const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const ext = path.extname(file.originalname);
@@ -125,7 +134,7 @@ export class EditionsController {
   }
 
   @Route('post', '/:id/upload', upload.single('file'))
-  async uploadFile(req: Request<{ id: string }>, res: Response) {
+  async uploadFile(req: AuthenticatedRequest<{ id: string }>, res: Response) {
     const id = parseInt(req.params.id);
     if (isNaN(id))
       return res.status(400).json({ error: 'Invalid edition ID.' });
@@ -135,23 +144,39 @@ export class EditionsController {
       });
 
     try {
-      const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
-      const relPath = `/ebooks/${req.file.filename}`;
-      const fileUrl = `${serverBaseUrl}${relPath}`;
-      const edition = await setEditionFilePath(id, fileUrl);
-      if (!edition) {
+      const existingEdition = await getEditionById(id);
+      if (!existingEdition) {
         fs.unlinkSync(req.file.path);
         return res.status(404).json({ error: 'Edition not found.' });
       }
+
+      const serverBaseUrl = `${req.protocol}://${req.get('host')}`;
+      const fileUrl = await uploadVaultAsset(
+        req.auth.token,
+        serverBaseUrl,
+        'files',
+        {
+          buffer: fs.readFileSync(req.file.path),
+          contentType: req.file.mimetype,
+          originalName: req.file.originalname,
+        },
+      );
+      const edition = await setEditionFilePath(id, fileUrl);
+      if (!edition) throw new Error('Failed to update edition file path.');
+
+      fs.unlinkSync(req.file.path);
       return res.status(200).json(edition);
     } catch (e) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       console.error(e);
       return res.status(500).json({ error: 'Failed to store file.' });
     }
   }
 
   @Route('get', '/:id/download')
-  async downloadFile(req: Request<{ id: string }>, res: Response) {
+  async downloadFile(req: AuthenticatedRequest<{ id: string }>, res: Response) {
     const id = parseInt(req.params.id);
     if (isNaN(id))
       return res.status(400).json({ error: 'Invalid edition ID.' });
@@ -162,6 +187,14 @@ export class EditionsController {
         return res.status(404).json({ error: 'Edition not found.' });
       if (!edition.filePath)
         return res.status(404).json({ error: 'No file for this edition.' });
+
+      const vaultFileId = extractVaultFileId(edition.filePath);
+      if (vaultFileId) {
+        await pipeVaultFileToResponse(req.auth.token, vaultFileId, res, {
+          download: true,
+        });
+        return;
+      }
 
       const filename = path.basename(new URL(edition.filePath).pathname);
       const fileDisk = resolveEditionFile(edition.filePath);
@@ -174,13 +207,16 @@ export class EditionsController {
       );
       return res.sendFile(fileDisk);
     } catch (e) {
+      if (e instanceof VaultHttpError) {
+        return res.status(e.status).json({ error: e.message });
+      }
       console.error(e);
       return res.status(500).json({ error: 'Failed to download file.' });
     }
   }
 
   @Route('get', '/:id/file')
-  async readFile(req: Request<{ id: string }>, res: Response) {
+  async readFile(req: AuthenticatedRequest<{ id: string }>, res: Response) {
     const id = parseInt(req.params.id);
     if (isNaN(id))
       return res.status(400).json({ error: 'Invalid edition ID.' });
@@ -192,6 +228,14 @@ export class EditionsController {
       if (!edition.filePath)
         return res.status(404).json({ error: 'No file for this edition.' });
 
+      const vaultFileId = extractVaultFileId(edition.filePath);
+      if (vaultFileId) {
+        await pipeVaultFileToResponse(req.auth.token, vaultFileId, res, {
+          range: req.get('range') ?? undefined,
+        });
+        return;
+      }
+
       const fileDisk = resolveEditionFile(edition.filePath);
       if (!fs.existsSync(fileDisk))
         return res.status(404).json({ error: 'File not found on disk.' });
@@ -200,6 +244,9 @@ export class EditionsController {
       res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
       return res.sendFile(fileDisk);
     } catch (e) {
+      if (e instanceof VaultHttpError) {
+        return res.status(e.status).json({ error: e.message });
+      }
       console.error(e);
       return res.status(500).json({ error: 'Failed to read file.' });
     }
